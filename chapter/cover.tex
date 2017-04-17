@@ -1,0 +1,135 @@
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:
+%\secretcontent{绝密}
+
+\ctitle{分布式流式主题模型的设计与实现}
+% 根据自己的情况选，不用这样复杂
+\makeatletter
+
+\makeatother
+
+\cdegree{工学硕士}
+\cdepartment[计算所]{中国科学院计算技术研究所}
+\cmajor{计算机软件与理论}
+\cauthor{郭天佑}
+\csupervisor{郭嘉丰\hspace{1em}研究员}
+\csupervisorplace{中国科学院计算技术研究所}
+% 如果没有副指导老师或者联合指导老师，把下面两行相应的删除即可。
+
+
+% 日期自动生成，如果你要自己写就改这个cdate
+%\cdate{\CJKdigits{\the\year}年\CJKnumber{\the\month}月}
+\cdate{二〇一七年五月}
+
+% 博士后部分
+% \cfirstdiscipline{计算机科学与技术}
+% \cseconddiscipline{系统结构}
+% \postdoctordate{2009年7月——2011年7月}
+
+\etitle{Microblog Classification\\ Based on Multimodal Fusion }
+% 这块比较复杂，需要分情况讨论：
+% 1. 学术型硕士
+%    \edegree：必须为Master of Arts或Master of Science（注意大小写）
+%              “哲学、文学、历史学、法学、教育学、艺术学门类，公共管理学科
+%               填写Master of Arts，其它填写Master of Science”
+%    \emajor：“获得一级学科授权的学科填写一级学科名称，其它填写二级学科名称”
+% 2. 学术型博士
+%    \edegree：Doctor of Philosophy（注意大小写）
+%    \emajor：“获得一级学科授权的学科填写一级学科名称，其它填写二级学科名称”
+
+\edegree{Master of Science}
+\eauthor{Guo Tianyou}
+\edepartment{Institute of Computing Technology\\Chinese Academy of Sciences}
+\emajor{Computer Software and Theory}
+\esupervisor{Guo Jiafeng}
+
+% 这个日期也会自动生成，你要改么？
+\edate{May, 2017}
+
+% 定义中英文摘要和关键字
+\begin{cabstract}
+微博分类作为处理和组织大量微博数据的关键技术，可以很大程度上解决微博信息爆炸的现象。
+但由于微博文本具有长度短、口语化等特点，传统的文本分类技术对微博文本不太适用。
+随着移动设备的普及，微博消息向着更加多媒体化的方向发展，越来越多的图片出现在微博中，微博文本与微博图像共同构成了微博的两个模态。
+每个模态的微博数据有着自己的特点，不同模态之间存在着一定的关联性和互补性。
+根据微博的这一特点，本文分别从文本模态，图像模态，多模态融合三个方面对微博分类问题进行了研究，主要贡献如下：
+
+
+（1）实现了基于文本模态的微博分类方法
+
+在文本模态，本文实现了一个基于Word2Vec语义扩充的卷积神经网络模型。
+针对微博短文本的特点，本文使用了大量的新闻语料训练出一个Word2Vec模型，在该模型基础上对微博文本进行语义扩充并构建特征矩阵。
+在特征矩阵的基础上，使用卷积操作模拟``滑动窗口''的效果，实现了基于Word2Vec语义扩充的微博分类模型。
+实验结果表明，基于Word2Vec语义扩充的微博文本分类方法效果整体上显著好于传统的词袋模型，F1值比词袋模型提升了约3.4个百分点，达到80.53\%。
+
+
+
+（2）实现了基于图像模态的微博分类方法
+
+在图像模态，由于本文的训练数据规模较小，难以单独训练图像语义识别模型。
+针对这个问题，本文采用了迁移学习的思想，使用在ImageNet数据集上预训练的Inception-v3模型对微博图像进行特征提取，把模型中倒数第二层的输出作为图像的特征向量。
+在图像特征向量的基础上，使用深度神经网络把图像特征向量映射到微博分类体系中。
+实验表明，在微博文本模态信息缺失或含有很大噪声的情况下，基于图像模态的微博分类是可行的。
+
+（3）实现了基于多模态融合的微博分类方法
+
+在文本和图像两个单模态模型的基础上，本文实现了两种基于多模态融合的微博分类方法。
+第一种是基于语言模型的单模态微博分类结果融合，即在两个单模态模型输出的概率向量基础上，结合语言模型、文本长度、图像个数等特征进行单模态结果的融合。
+第二种是基于多模态特征融合的微博分类，该方法把两个模态的特征使用卷积等方法进行规格统一，构成一个数据流，使用LSTM模型对两个模态进行融合。
+实验表明，基于多模态融合的微博分类效果要显著优于单模态的模型。
+对比基于Word2Vec语义扩充的微博分类结果，特征融合的方法F1值提升了4.4个百分点，达到了84.94\%。
+
+
+
+\end{cabstract}
+
+\ckeywords{社交网络, 微博分类, 词向量, 图像语义识别, 多模态融合}
+
+\begin{eabstract}
+
+As the key technology of organizing and processing large scale microblog dataset, microblog classification can greatly solve the problem of microblog data explosion. However, since microblog has the characteristics of short length and colloquialism, traditional text classification technology is not applicable to microblog text.
+With the popularity of mobile devices, microblog displays more multi-medida contents,
+more and more pictures appear in microblog message, texts and pictures constitute the two modalities of microblog.
+Each modality has its own characteristics,
+and there are some correlation and complementarity between different modalities.
+In this paper,
+the problem of microblog classification is studied from three aspects including text modality, image modality and multimodal fusion.
+The main contributions can be summarized as follows:
+
+1. Microblog classification based on text modality
+
+In the text modality, a convolutional neural network based on Word2Vec is implemented.
+According to the characteristics of short text, many news corpus are used to train a Word2Vec model.
+The Word2Vec model is used to expand the semantics of microblog and build feature matrix.
+Then convolutional operations are used to simulate sliding window and
+a microblog text classification model is trained based on the feature matrix.
+Experimental results show that, compared with the bag of words model, our microblog text classification model based on Word2Vec semantic expansion has a significantly better result.
+F1 increases by 3.4 percentage points compared with the bag of words model, which achieves to 80.53\%.
+
+2. Microblog classification based on image modality
+
+In the image modality, since the dataset used in this paper is small, it is difficult to train an image recognition model independently.
+To solve this problem, we use the idea of transfer learning.
+A pre-trained Inception-v3 model on ImageNet dataset is used to extract feature of microblog image.
+The penultimate layer of the Inception-v3 model are treated as the image feature vector,
+then a deep neural network is used to embedding image feature vectors to microblog classification targets.
+Experimental results show that our image recognition model is feasible for microblog classification.
+
+
+3. Microblog classification based on multimodal fusion
+
+Based on the text modality and the image modality,
+two multimodal fusion methods are implemented to do microblog classification.
+The first one is to do fusion based on the classification results of 2 single modalities with a language model.
+It considers some features which include language model probability, text length and image count when fusing  the  results of two single modality.
+The second method is to do feature fusion. Features of two single modalities are first unified through convolutional operation
+and thus constitute a data stream, then a LSTM model is used to fusion the data stream.
+Experimental results show that microblog classification model based on multimodal fusion are significantly better than the two single modality models.
+Compared with the microblog text classification model based on Word2Vec semantic expansion, our multimodal feature fusion method improves F1 by 4.4 percent points, which achieves to 84.94\%.
+
+\end{eabstract}
+
+\ekeywords{Social Network, Microblog Classification, Word Vector, Image Recognition,  Multimodal Fusion}

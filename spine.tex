@@ -1,0 +1,29 @@
+\documentclass[doctor]{ucasthesis}
+
+\ifxetex
+  \setCJKfamilyfont{zhfs}[RawFeature={vertical:}]{FangSong}
+\else % for latex/pdflatex
+  \usepackage{CJKvert}
+\fi
+
+\begin{document}
+
+% 不带英文或数字的书脊
+\cauthor{张水源}
+\ctitle{基于多模态融合的微博分类}
+
+%\cauthor{刘春梅}
+%\ctitle{开源论坛信息抽取技术研究}
+
+\spine
+
+% 带有英文或数字的书脊请按样例微调排版
+%\ifxetex
+%  \spine[中国科学院大学学位论文 \raisebox{5pt}{\rotatebox{-90}{\raisebox{2pt}{\LaTeX}}}\vspace{0.25em} \\ 模板
+%    \raisebox{5pt}{\rotatebox{-90}{\raisebox{2pt}{v\version}}}\vspace{0.25em} \\ 使用示例文档]
+%\else
+%  \spine[中国科学院大学学位论文 \raisebox{5pt}{\rotatebox{-90}{\raisebox{2pt}{\LaTeX}}}\vspace{0.25em} \\ 模板
+%    \raisebox{5pt}{\rotatebox{-90}{\raisebox{2pt}{v\version}}}\vspace{0.25em} \\ 使用示例文档]
+%\fi
+
+\end{document}
