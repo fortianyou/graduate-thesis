@@ -1,8 +1,8 @@
-\chapter{流式主题模型的参数数据结构}
-\label{chapter:hybridps}
+\chapter{流式主题模型的实现}
+\label{chapter:implement}
 参数服务器的出现，使得分布式并行算法的实现更加简便高效。
 目前已知的大规模高效主题模型算法的实现都采用了参数服务器\cite{li2014scaling}, 比如YahooLDA\cite{ahmed2012scalable}, LightLDA\cite{yuan2015lightlda}, 以及Peacock\cite{li2014scaling}（只实现了模型并行服务，还未抽象出来参数服务器）。
-本章将介绍使用参数服务器来构建混合结构的流式主题参数模型。
+本章将介绍使用参数服务器来构建的流式主题参数数据结构，以及在此基础上的一些具体算法优化方案。
 
 \section{参数服务器简介}
 \subsection{数据并行}
@@ -43,7 +43,7 @@ $\approx$ \#machine $\times$ time & \# of jobs& failure rate \\
 \end{tabular}
 \end{table}
 
-论文\ref{li2014scaling}中统计了某数据中心3个月机器学习任务信息，表格显示随着算法规模的变大，任务出错的可能性也越大。
+论文\cite{li2014scaling}中统计了某数据中心3个月机器学习任务信息，表格显示随着算法规模的变大，任务出错的可能性也越大。
 
 因而参数服务器主要解决如下挑战：
 
@@ -55,7 +55,7 @@ $\approx$ \#machine $\times$ time & \# of jobs& failure rate \\
 
 
 \begin{figure}[htb]\centering
-\includegraphics[width=1\linewidth]{SSP}
+\includegraphics[width=0.8\linewidth]{SSP}
 \caption{Stale Synchronous Parallel}
 \label{fig:SSP}       % Give a unique label
 \end{figure}
@@ -71,7 +71,7 @@ $\approx$ \#machine $\times$ time & \# of jobs& failure rate \\
 我们知道词汇的分布服从幂率分布，也就说大语料中绝大多数出现的词汇属于低频词，并且在流式数据中呈现出线性增长的趋势，如图\ref{fig:power-law, fig:noFreq2-5VsWords}。
 
 \begin{figure}[htb]\centering
-\includegraphics[width=0.7\linewidth]{power-law}
+\includegraphics[width=0.5\linewidth]{power-law}
 \caption{词频的幂率分布现象}
 \label{fig:power-law}       % Give a unique label
 \end{figure}
@@ -80,7 +80,7 @@ $\approx$ \#machine $\times$ time & \# of jobs& failure rate \\
 论文\cite{yuan2015lightlda}还提到静态词和常用词大约只占所有词汇的$10\%$，而低频词却占了$90\%$。然而，静态词和常用词大约覆盖了$95\%$的语料，而低频词仅仅占了$5\%$。
 
 \begin{figure}[htb]\centering
-\includegraphics[width=0.7\linewidth]{noFreq2-5VsWords}
+\includegraphics[width=0.5\linewidth]{noFreq2-5VsWords}
 \caption{文档与低频词关系图}
 \label{fig:noFreq2-5VsWords}       % Give a unique label
 \end{figure}
@@ -103,7 +103,9 @@ $\approx$ \#machine $\times$ time & \# of jobs& failure rate \\
 这种方法，避免了动态词表的维护，并且大大减少了参数规模，在许多主题模型的实现中都得到了应用。
 
 \begin{figure}[htb]\centering
-\includegraphics[width=1\linewidth]{new-word-trend}
+\includegraphics[height=0.23\linewidth,width=0.7\linewidth]{word-trend-alphago}
+\includegraphics[height=0.23\linewidth,width=0.7\linewidth]{word-trend-laotie}
+\includegraphics[height=0.23\linewidth,width=0.7\linewidth]{word-trend-taolu}
 \caption{微博新词被提及的整体趋势}
 \label{fig:new-word-trend}       % Give a unique label
 \end{figure}
@@ -137,7 +139,7 @@ $\approx$ \#machine $\times$ time & \# of jobs& failure rate \\
 
 
 \begin{figure}[htb]\centering
-\includegraphics[width=1\linewidth]{hybrid-ps}
+\includegraphics[width=0.8\linewidth]{hybrid-ps}
 \caption{混合参数数据结构}
 \label{fig:hybrid-ps}       % Give a unique label
 \end{figure}
@@ -179,25 +181,25 @@ int和float所能表示的范围和精度有限，当数据太大时可能造成
 在本文的实现中，我们选择了4字节基本类型作为参数类型。
 
 \subsection{优化算法采样顺序}
-常见的主题模型Gibbs采样算法是坐标轴下降方法，交替轮换坐标轴逐一地采样更新。
-在一般情形中，对语料采样通常是语料中词汇出现的自然顺序，先后地对出现的词汇执行采样，如算法\ref{alg:natural-order}。
-
-根据LDA模型Gibbs采样的概率分布公式，词汇采样过程中将会使用到与词汇关联的词汇主题分布$n(w, \mathbf{k})$。
-但是自然顺序，词汇在语料中的分布式散乱的，前后被采样的词汇基本上是不相同的，相当于每次采样都随机地访问了词汇-主题表TAB(V, Z)中的一行。
 
 \begin{algorithm}[htb]
 \label{alg:natural-order}
-\caption{Sample in natural order}
+\caption{Sample in Natural Order}
 \begin{algorithmic}[1] 
 \Require TAB(V, Z), $\mathbf{k} = [1, 2, ..., K], \mathbf{w}$
 \For { m = 1 to $M$ }
 \For { n = 1 to $N_m$}
 \State \textbf{Require} parameter $n(w_{mn}, \mathbf{k}) \sim$ TAB(V, Z)
-\State GibbsSampling($z_{mn}, n(w_{mn}, \mathbf{k})$)
+\State SAMPLE($z_{mn}, n(w_{mn}, \mathbf{k})$)
 \EndFor
 \EndFor
 \end{algorithmic}  
 \end{algorithm}  
+常见的主题模型Gibbs采样算法是坐标轴下降方法，交替轮换坐标轴逐一地采样更新。
+在一般情形中，对语料采样通常是语料中词汇出现的自然顺序，先后地对出现的词汇执行采样，如算法\ref{alg:natural-order}。
+
+根据LDA模型Gibbs采样的概率分布公式，词汇采样过程中将会使用到与词汇关联的词汇主题分布$n(w, \mathbf{k})$。
+但是自然顺序，词汇在语料中的分布式散乱的，前后被采样的词汇基本上是不相同的，相当于每次采样都随机地访问了词汇-主题表TAB(V, Z)中的一行。
 
 这种情况下词汇主题分布向量$n(w, \mathbf{k})$难以被复用（做到这点必须完全加载整张表，而前面分析提到这张表有可能超过单机内存的容量）。
 另外一方面，如果不复用$n(w, \mathbf{k})$，则需要频繁地对参数服务器发起pull请求，这显然会增加网络请求的次数，
@@ -205,14 +207,14 @@ int和float所能表示的范围和精度有限，当数据太大时可能造成
 显然，这种访问效率是极其低效的。
 
 \begin{algorithm}[htb]
-\caption{Sample in vocabulary order} 
+\caption{Sample in Vocabulary Order} 
 \label{alg:vocab-order}
 \begin{algorithmic}[1]
 \Require TAB(V, Z) = \textbf{\{Dense(V, Z), Sparse(V, Z)\}}, $\mathbf{k} = [1, 2, ..., K], \mathbf{w_d, w_s}$
 \Function{DO\_SAMPLING}{$\mathbf{n(v_b, k), w}$}
 \For { each $t$ in $\mathbf{v_b}$}
 \For { each $(m , n)$ where $w_{mn } = t$}
-\State GibbsSampling($z_{mn}, n(w_{mn}, \mathbf{k}), \mathbf{w}$)
+\State SAMPLE($z_{mn}, n(w_{mn}, \mathbf{k}), \mathbf{w}$)
 \EndFor
 \EndFor
 \EndFunction
@@ -257,7 +259,7 @@ Sparse(V, Z)所对应的词汇子集含有大量的低频词，大部分词汇�
 
 
 \begin{algorithm}[htb]
-\caption{Pipeline update parameters} 
+\caption{Pipeline Parameters Update} 
 \label{alg:vocab-order}
 \begin{algorithmic}[1]
 \Require TAB(V, Z) = \textbf{\{Dense(V, Z), Sparse(V, Z)\}}, $\mathbf{k} = [1, 2, ..., K], \mathbf{w_d, w_s}$
@@ -306,4 +308,35 @@ Sparse(V, Z)所对应的词汇子集含有大量的低频词，大部分词汇�
 
 
 \section{实验分析}
+
+\subsection{静态词表实验分析}
+\begin{figure}[htb]\centering
+\includegraphics[height=0.41\linewidth]{static-vocab-vs-runtime}
+\includegraphics[height=0.41\linewidth]{static-vocab-runtime-iteration}
+\caption{静态词表大小与运行时间关系示意}
+\label{fig:static-vocab-runtime}       % Give a unique label
+\end{figure}
+
+图\ref{fig:static-vocab-runtime}所显示的是静态词表大小与算法运行时间之间的关系。
+
+在左子图中，实验中每轮迭代遍历41310个文档，语料中出现的词汇总量为203891。
+左子图中显示的纵坐标运行时间为算法采样10轮的时间平均值（单位为秒），横坐标表示的静态词汇表的大小（*10000）。
+本文分别统计了主题维度为100和1000两种情况下，算法运行时间与静态词汇表大小之间的关系。
+如图所示，我们不难发现曲线呈对钩形状。在这个实验中静态词汇表的带下设置为50000左右比较合适。
+静态词汇表太大，低频词会逐渐增多，意味着混合参数中的Dense(V,Z)表会变得越来越稀疏，因而会大大降低算法的性能。
+另外一方面静态词汇表也不能太小，语料中高频词的覆盖率占了绝大多数，小的静态词汇表无法充分地覆盖语料，使得许多参数访问被转向Sparse(V,Z)，从而也会降低算法的性能。
+
+在右子图中，实验中每轮迭代遍历808301个文档，语料中出现的词汇总量为982101。
+纵坐标表示每轮迭代的运行时间（单位为分钟），横坐标表示算法的迭代轮数。
+如果所示，本文分别设置了三组静态词表大小（20000，40000，50000），主题模型的维度都为1000。
+不管静态词表的大小如何，随着迭代轮数的增长，运行时间都表现出下降的趋势。
+起初三组实验算法运行时间存在明显的差异，其中静态词汇表大小为20000的实验显示运行时间远大于另外两组。
+但是随着时间的推移，运行时间逐渐降低并且逼近另外两组。这是因为Sparse(V, Z)随着算法迭代轮数的增加越来越稀疏，带来了网络传输量的急剧下降。
+
+\subsection{网络传输效率实验}
+
+\subsection{采样算法效率实验}
+
+\subsection{流式主题模型效果}
+
 \section{本章小结}

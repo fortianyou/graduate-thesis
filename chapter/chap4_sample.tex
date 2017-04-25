@@ -131,7 +131,7 @@ p(x, y_1) p(y_2 | x) = p(x, y_2) p(y_1 | x) \\
 如算法\ref{alg:gibbs-sampling}，马氏链的转移是按照坐标轴下降的方式串行地进行转移。等待马氏链收敛之后，我们便能够得到样本的分布$p(x,y)$，在收敛之前的阶段成为burn-in阶段。
 
 \begin{algorithm}[htb]  
-\caption{二维Gibbs采样算法}
+\caption{2-Dimension Gibbs Sampling}
 \label{alg:gibbs-sampling}
 \begin{algorithmic}[1] 
 \State Set initial state of markov chain $X_0 = x_0, Y_0 = y_0$
@@ -142,7 +142,7 @@ p(x, y_1) p(y_2 | x) = p(x, y_2) p(y_1 | x) \\
 \end{algorithmic}  
 \end{algorithm}  
 
-\section{Gibbs采样在主题模型中的应用}
+\section{主题模型采样算法}
 前面的章节已经简略地介绍了主题模型的Gibbs采样参数估计方法。
 在LDA模型中我们会关心主题变量$z$在语料上的分布，然而我们事先并不知道$p\mathbf{ (z, w)}$的具体情况。
 我们已经知道了通过MCMC方法可以收敛得到一些来自于某一稳定分布的样本。
@@ -162,7 +162,7 @@ p(z_i = y , \mathbf{z}_{\neg i}, \mathbf{w}) p( z_i = x | \mathbf{z}_{\neg i},  
 实际上，利用主题模型参数的稀疏性，采样算法的时间和空间复杂度都会得到降低。
 本文在本节的以下部分介绍几种高效的采样算法。
 
-\section{Sparse LDA}
+\subsection{Sparse LDA}
 在此之前，本文已经多次介绍了LDA主题模型的采样公式：
 \begin{equation}
 \label{eq:sample-prob}
@@ -199,7 +199,7 @@ q =& \sum_k {\dfrac{ n_{k, w_i}^{\neg di} (n_{k, m}^{\neg di} + \alpha)}{ n_{k, 
 也就是说真正影响该算法效率的项是$q$，总的来说这个方法的模型复杂度基本服从$O(K_w)$，相对于原先的$O(K)$复杂度有了大大的提升。
 Sparse LDA为了提高算法效率，还针对$q$提出了一些缓存和优化策略，但是这些方法的提升空间都很有限，并且需要消耗大量的存储空间。
 
-\section{Alias LDA}
+\subsection{Alias LDA}
 Sparse LDA的时间复杂度主要取决于$O(K_w)$，因为采样更新过程会频繁地更新计数$n_{k, m}$和$n_{k, w}$。
 Alias LDA则从另外一个角度出发分解采样公式\ref{eq:sample-prob}：
 \begin{equation}
@@ -221,7 +221,7 @@ y = & \sum_k {\dfrac{\alpha( n_{k, w_i}^{\neg di} + \eta) }{ n_{k, \cdot}^{\neg 
 Alias LDA利用了词汇主题计数分布在文档采样过程中不会太大变化的特性，预先使用$O(K)$的时间计算了辅助的Alias Table，使得每次的采样的时间降低到$O(1)$。
 因而Alias LDA采样的整体复杂度降低到了$O(K_d)$。
 
-\subsection{Alias Table}
+\subsubsection{Alias Table}
 \begin{figure}[htb]\centering
 \includegraphics[width=1\linewidth]{alias-table}
 \caption{Alias Table构建过程示意}
@@ -293,7 +293,7 @@ Init算法实际上是对一个面积为1的区域进行填空的过程。
 
 (4) 对所有变量$X_i$，有$\mbox{area}[i] = p_i$。
 
-\section{Light LDA}
+\subsection{Light LDA}
 Light LDA在Sparse LDA和Alias LDA的基础之上进一步提升了采样的效率。
 Light LDA认为提议分布$q(\cdot)$的选择对算法快速收敛到真实LDA后验分布$p(\cdot)$具有重要的意义，
 挑选得好的分布能够从两个方面提升采样效率：
@@ -314,7 +314,7 @@ Light LDA发现公式\ref{eq:sample-prob}中拥有两项，其中一项与文档
 不难推理出，该采样公式中概率密度主要集中在那些词汇主题计数$n_{k,w}$和文档主题计数$n_{k,d}$都比较大的主题。
 因此，公式\ref{eq:sample-prob}两项均可以作为较好的主题采样分布的提议分布。
 
-\subsection{词汇提议分布}
+\subsubsection{词汇提议分布}
 定义词汇提议分布为：
 \begin{equation}
 p_w(z = k) \propto \dfrac{n_{k,w} +\eta}{n_{k, \cdot} + V \eta}
@@ -331,7 +331,7 @@ p_w(z = k) \propto \dfrac{n_{k,w} +\eta}{n_{k, \cdot} + V \eta}
 显然$\pi_w$的值相对来说比较大，每次提议采样$t$都有比较大的概率被接受。
 除此之外，Light LDA仍然假设段时间内概率$p_w$不会发生很大的变化，并使用Alias Table技术在每轮迭代之前预先计算好AliasTable来提高采样的速度。
 
-\subsection{文档提议分布}
+\subsubsection{文档提议分布}
 定义文档提议分布为：
 \begin{equation}
 p_d(z = k) \propto (n_{k,d} +\alpha)
@@ -349,7 +349,7 @@ p_d(z = k) \propto (n_{k,d} +\alpha)
 
 \begin{figure}[htb]\centering
 \includegraphics[width=1\linewidth]{mh-proposal}
-\caption{Alias Table构建过程示意}
+\caption{提议分布与真实采样分布}
 \label{fig:mh-proposal}       % Give a unique label
 \end{figure}
 

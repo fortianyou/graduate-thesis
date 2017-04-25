@@ -299,7 +299,7 @@ p( z_i = k | \mathbf{z}_{\neg i},  \mathbf{w})
 这意味着并行算法可以放松对$n(k)$和$n(w, k)$的同步（严格的同步极大的降低分布式算法的效率），从而可以加大算法的并行度同时保证算法收敛。
 综上，本文提出的算法将设置$n(k)$和$n(w, k)$为全局参数，并假设在某些时刻这两个参数会得到同步（比如，以时间片为粒度）。
 \begin{algorithm}[]
-\caption{在线流式主题模型}
+\caption{Online Stream Topic Model}
 \label{alg:onlineStreamLDA}
 \textbf{\underline{Task Scheduler:}}
 \begin{algorithmic}[1]
@@ -314,7 +314,7 @@ p( z_i = k | \mathbf{z}_{\neg i},  \mathbf{w})
 \State Create a global vocabulary $V_g$
 \For{ t = 1 to $\infty$}
 \State Issue UPDATE\_VOCAB\&PARAMS(t)
-\State Issue WORKER\_CGBS($t$) to all workers
+\State Issue WORKER\_SAMPLE($t$) to all workers
 \EndFor
 \end{algorithmic}
 \textbf{\underline{Workers $r = 1, ..., R$:}}
@@ -323,11 +323,11 @@ p( z_i = k | \mathbf{z}_{\neg i},  \mathbf{w})
 \State Load a part of training data of $S^t$ as $C^t$
 \State Pull the parameter set $\beta^t(k)$ and $\beta^t(w, k)$ from servers
 \EndFunction
-\Function{ WORKER\_CGBS}{$t$}
+\Function{ WORKER\_SAMPLE}{$t$}
 \State Issue LOAD\_DATA($t$)
 \State Initialize topic assignment to each word in $C^t$ 
 \For{ each word $w$ in $C^t$ }
-\State FastGibbsSampling($C^t, \beta^t(k), \beta^t(w, k), \alpha$)
+\State DO\_SAMPLING($C^t, \beta^t(k), \beta^t(w, k), \alpha$)
 \EndFor
 \State Collect and summary $n_{k,w}^{(t)}$ and $n_{k}^{(t)}$
 \State Set $\bigtriangleup \beta^t(k) = \rho_t n_{k}^{(t)}, \bigtriangleup \beta^t(w, k) = \rho_t n_{k,w}^{(t)}$ and push $\bigtriangleup \beta^t(k), \bigtriangleup \beta^t(w, k)$ to servers
@@ -358,7 +358,7 @@ p( z_i = k | \mathbf{z}_{\neg i},  \mathbf{w})
 显然，窗口越大模型所能保留的数据信息越完整。当窗口足够大时，我们有理由相信模型算法能够训练得到一个趋近与真实数据分布的模型。
 
 \begin{algorithm}
-\caption{增量流式主题模型}
+\caption{Incremental Stream Topic Model}
 \label{alg:IncStreamLDA}
 \textbf{\underline{Task Scheduler:}}
 \begin{algorithmic}[1]
@@ -369,7 +369,7 @@ p( z_i = k | \mathbf{z}_{\neg i},  \mathbf{w})
 \State Create a global vocabulary $V_g$
 \For{ t = 1 to $\infty$}
 \State Issue UPDATE\_VOCAB\&PARAMS(t)
-\State Issue WORKER\_CGBS($t$) to all workers
+\State Issue WORKER\_SAMPLE($t$) to all workers
 \EndFor
 \end{algorithmic}
 \textbf{\underline{Worker $r = 1, ..., R$:}}
@@ -378,11 +378,11 @@ p( z_i = k | \mathbf{z}_{\neg i},  \mathbf{w})
 \State Load a part of training data of $S^t$ as $C^t$
 \State Pull the parameter set $\beta^t(k)$ and $\beta^t(w, k)$ from servers
 \EndFunction
-\Function{ WORKER\_CGBS}{$t$}
+\Function{ WORKER\_SAMPLE}{$t$}
 \State Issue LOAD\_DATA($t$)
 \State Initialize topic assignment to each word in $C^t$ 
 \For{ each word $w$ in $C^t$ }
-\State FastGibbsSampling($C^t, \beta^t(k), \beta^t(w, k), \alpha$)
+\State DO\_SAMPLING($C^t, \beta^t(k), \beta^t(w, k), \alpha$)
 \EndFor
 \State Collect and summary $n_{k,w}^{(t)}$ and $n_{k}^{(t)}$
 \State Load $\bigtriangleup \beta^{t - \sigma}(k), \bigtriangleup \beta^{t - \sigma}(w, k)$ from local file

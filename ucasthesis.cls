@@ -710,6 +710,8 @@
 \renewcommand*\l@figure{\vspace*{1ex}\@dottedtocline{1}{0em}{4em}}
 \renewcommand\listoftables{\ucas@listof{table}}
 \let\l@table\l@figure
+\newcommand\listofalgorithms{\ucas@listof{algorithm}}
+\let\l@algorithm\l@figure
 \def\ext@equation{loe}
 \def\equcaption#1{%
   \addcontentsline{\ext@equation}{equation}%

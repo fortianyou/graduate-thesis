@@ -7,8 +7,9 @@
 *.out
 *.toc
 *.fmt
+*.loe
 
-thesis.pdf
+*.pdf
 
 #mac & windows difference
 fontname.def
