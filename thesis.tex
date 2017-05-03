@@ -31,7 +31,7 @@
 % 定义所有的eps文件在 figures 子目录下
 \graphicspath{{figures/}}
 
-%%% 封面部分
+%% 封面部分
 \frontmatter
 \input{chapter/cover}
 %% 设置 PDF 文档的作者、主题等属性
@@ -41,24 +41,24 @@
 \makecover
 
 
-%% 目录
+% 目录
 \tableofcontents
-%% 插图索引
+% 插图索引
 \listoffigures
-%% 表格索引
+% 表格索引
 \listoftables
-%% 算法索引
+% 算法索引
 \listofalgorithms
-%%
+%
 \listofequations
 
-%%% 正文部分
+%% 正文部分
 \mainmatter
 \include{chapter/chap1_intro}
 \include{chapter/chap2_relate}
 \include{chapter/chap3_design}
-\include{chapter/chap4_sample}
-\include{chapter/chap5_impl}
+\include{chapter/chap4_param}
+\include{chapter/chap5_sample}
 \include{chapter/chap6_summary}
 
 
@@ -81,7 +81,7 @@
 \include{chapter/ack}
 %
 %% 作者简介
-%\include{chapter/resume}
+\include{chapter/resume}
 
 
 % 保证总页数为偶数。连续双面打印时，防止将两份论文的末页、首页打印在同一张纸上。

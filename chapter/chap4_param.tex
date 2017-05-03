@@ -1,8 +1,9 @@
-\chapter{流式主题模型的实现}
-\label{chapter:implement}
+\chapter{流式主题模型的参数结构}
+\label{chapter:parameter}
 参数服务器的出现，使得分布式并行算法的实现更加简便高效。
-目前已知的大规模高效主题模型算法的实现都采用了参数服务器\cite{li2014scaling}, 比如YahooLDA\cite{ahmed2012scalable}, LightLDA\cite{yuan2015lightlda}, 以及Peacock\cite{li2014scaling}（只实现了模型并行服务，还未抽象出来参数服务器）。
-本章将介绍使用参数服务器来构建的流式主题参数数据结构，以及在此基础上的一些具体算法优化方案。
+目前已知的大规模高效主题模型算法的实现都采用了参数服务器\cite{li2014scaling}, 
+比如YahooLDA\cite{ahmed2012scalable}, LightLDA\cite{yuan2015lightlda}, 以及Peacock\cite{li2014scaling}（只实现了模型并行服务，还未抽象出来参数服务器）。
+本章将介绍使用参数服务器来构建的流式主题参数数据结构，以及在此基础上的一些具体算法优化方案和参数备份和恢复机制。
 
 \section{参数服务器简介}
 \subsection{数据并行}
@@ -66,7 +67,7 @@ $\approx$ \#machine $\times$ time & \# of jobs& failure rate \\
 后者的主要方式包括从应用的角度减少参数的访问，使用更小更紧凑的参数类型，更稀疏的参数表示等等。为此，接下来本章将主要介绍如何设计分布式流式主题模型的参数存储和使用。
 
 
-\section{流式主题模型词汇表}
+\section{参数结构的设计}
 在互联网环境下，流式数据没有尽头，人们无法提前预知数据的分布，因而数据流上不断会有未登录词出现。
 我们知道词汇的分布服从幂率分布，也就说大语料中绝大多数出现的词汇属于低频词，并且在流式数据中呈现出线性增长的趋势，如图\ref{fig:power-law, fig:noFreq2-5VsWords}。
 
@@ -157,11 +158,15 @@ $\approx$ \#machine $\times$ time & \# of jobs& failure rate \\
 
 通过上面的设计方案，我们既高效地维护了一个动态词表，同时又使得绝大多数数参数访问和修改发生在了稠密矩阵上。
 
-\section{优化实现方案}
+\section{参数数据结构的实现}
+根据上面的参数数据结构的设计，在实现过程中我们还要考虑诸多因素。
+在本文的实现中，我们使用了开源的glint\cite{glint}作为稠密参数的存储，使用了redis\cite{redis}内存键值缓存系统作为稀疏存储。
+除此之外，在实现过程中我们还需要考虑到数值类型的选择，稀疏存储Sparse(V, Z)的稀疏性维护，参数系统的备份和恢复。
+
+\subsection{使用int和float基本类型}
 除了上面通过优化参数数据结构的方案来提高算法的参数服务器的使用性能之外，
 一些具体的实现技巧也能大大提高算法的效率，这种思路在许多高效的算法实现中都能看到。
 
-\subsection{使用int和float基本类型}
 在基本类型中，最经常使用的整型int和浮点型float都只占用4个字节，而long和double类型通常占用8个字节。
 这些类型的值域分别是：
 
@@ -180,108 +185,8 @@ int和float所能表示的范围和精度有限，当数据太大时可能造成
 
 在本文的实现中，我们选择了4字节基本类型作为参数类型。
 
-\subsection{优化算法采样顺序}
 
-\begin{algorithm}[htb]
-\label{alg:natural-order}
-\caption{Sample in Natural Order}
-\begin{algorithmic}[1] 
-\Require TAB(V, Z), $\mathbf{k} = [1, 2, ..., K], \mathbf{w}$
-\For { m = 1 to $M$ }
-\For { n = 1 to $N_m$}
-\State \textbf{Require} parameter $n(w_{mn}, \mathbf{k}) \sim$ TAB(V, Z)
-\State SAMPLE($z_{mn}, n(w_{mn}, \mathbf{k})$)
-\EndFor
-\EndFor
-\end{algorithmic}  
-\end{algorithm}  
-常见的主题模型Gibbs采样算法是坐标轴下降方法，交替轮换坐标轴逐一地采样更新。
-在一般情形中，对语料采样通常是语料中词汇出现的自然顺序，先后地对出现的词汇执行采样，如算法\ref{alg:natural-order}。
-
-根据LDA模型Gibbs采样的概率分布公式，词汇采样过程中将会使用到与词汇关联的词汇主题分布$n(w, \mathbf{k})$。
-但是自然顺序，词汇在语料中的分布式散乱的，前后被采样的词汇基本上是不相同的，相当于每次采样都随机地访问了词汇-主题表TAB(V, Z)中的一行。
-
-这种情况下词汇主题分布向量$n(w, \mathbf{k})$难以被复用（做到这点必须完全加载整张表，而前面分析提到这张表有可能超过单机内存的容量）。
-另外一方面，如果不复用$n(w, \mathbf{k})$，则需要频繁地对参数服务器发起pull请求，这显然会增加网络请求的次数，
-不仅产生了更多网络延迟同时也更容易造成参数服务器的响应瓶颈，更严重的情况可能造成参数服务器崩溃或者网络通信失败。
-显然，这种访问效率是极其低效的。
-
-\begin{algorithm}[htb]
-\caption{Sample in Vocabulary Order} 
-\label{alg:vocab-order}
-\begin{algorithmic}[1]
-\Require TAB(V, Z) = \textbf{\{Dense(V, Z), Sparse(V, Z)\}}, $\mathbf{k} = [1, 2, ..., K], \mathbf{w_d, w_s}$
-\Function{DO\_SAMPLING}{$\mathbf{n(v_b, k), w}$}
-\For { each $t$ in $\mathbf{v_b}$}
-\For { each $(m , n)$ where $w_{mn } = t$}
-\State SAMPLE($z_{mn}, n(w_{mn}, \mathbf{k}), \mathbf{w}$)
-\EndFor
-\EndFor
-\EndFunction
-\For { each block $\mathbf{n(v_b, k)}$ in \textbf{Dense(V, Z)} }
-\State Issue DO\_SAMPLING($\mathbf{n(v_b, k), w_d}$)
-\EndFor
-\State Set $\mathbf{v_s}$ as the low-frequent vocabulary local
-\State Pull all $\mathbf{n(v_s, k)} \sim $ \textbf{Sparse(V, Z)}
-\State Issue DO\_SAMPLING($\mathbf{n(v_s, k), w_s}$)
-\end{algorithmic}  
-\end{algorithm}  
-
-实际上，Gibbs采样算法并没有严格要求采样的顺序。
-根据主题模型参数数据结构的设计，令TAB(V, Z) = \{Dense(V, Z), Sparse(V, Z)\}，
-其中Dense(V, Z)表示稠密的参数矩阵，Sparse(V, Z)表示稀疏的<Key, Value>参数矩阵。
-
-Dense(V, Z)所对应的词汇子集都是高频词，这些词汇在所有语料子集上都有很大的概率会出现。
-根据这些特性，按块读取稠密矩阵Dense(V, Z)，虽然有可能会下载一些无用的参数，但是将会大大提高网络传输的效率。
-
-Sparse(V, Z)所对应的词汇子集含有大量的低频词，大部分词汇不大可能出现在所有的语料子集上。因而每个子集上的低频词词汇表只是全局低频词词汇表的一个较小的子集
-。因为这部分参数高度稀疏，所以实际中可以完整下载本地所有需要的参数。
-
-根据以上的参数数据结构特性，本文算法\ref{alg:vocab-order}实现中将文档分为高频词和低频词两部分。
-之后对高频词部分按照词汇表顺序排序汇总。
-同时对静态稠密的Dense(V, Z)参数矩阵进行分块。
-
-当采样算法开始时，算法实现按照块读取的方式读取Dense(V, Z)参数稠密矩阵的一部分，并在语料文档中的稠密部分执行相应词汇的重采样。
-执行完改步骤之后，从Sparse(V, Z)中pull将本地所有本地需要的低频词参数，并执行文档低频词部分的重采样。
-
-\subsection{Pipeline参数更新}
-当Gibbs采样是按照文本语料中词汇的自然顺序采样时，参数不得不等待所有语料中词汇都被采样之后在同步更新。
-这种做法在采样过程中网络处于空闲状态，而在参数更新时又很容易出现网络使用高峰。
-
-在按照上一小节的方式优化Gibbs采样顺序之后，我们发现每个词汇的主题分布向量无需互相等待，因而在一个词汇所有出现位置都经过采样之后便可以执行参数的增量更新。
-这种方法称之为Pipeline，它将参数在时间维度上异步均摊地执行网络更新，不仅在采样过程中利用了网络，还有效地解决了网络高峰的问题。
-
-\begin{figure}[htb]\centering
-\includegraphics[width=0.7\linewidth]{pipeline}
-\caption{Pipeline异步地进行网络传输}
-\label{fig:pipeline}       % Give a unique label
-\end{figure}
-
-
-\begin{algorithm}[htb]
-\caption{Pipeline Parameters Update} 
-\label{alg:vocab-order}
-\begin{algorithmic}[1]
-\Require TAB(V, Z) = \textbf{\{Dense(V, Z), Sparse(V, Z)\}}, $\mathbf{k} = [1, 2, ..., K], \mathbf{w_d, w_s}$
-\Function{DO\_SAMPLING}{$\mathbf{n(v_b, k), w}$}
-\For { each $t$ in $\mathbf{v_b}$}
-\For { each $(m , n)$ where $w_{mn } = t$}
-\State GibbsSampling($z_{mn}, n(w_{mn}, \mathbf{k}), \mathbf{w}$)
-\EndFor
-\State Calculate update $\Delta \beta(w, \mathbf{k})$
-\State Push $\Delta \beta(w, \mathbf{k})$ to parameter
-\EndFor
-\EndFunction
-\For { each block $\mathbf{n(v_b, k)}$ in \textbf{Dense(V, Z)} }
-\State Issue DO\_SAMPLING($\mathbf{n(v_b, k), w_d}$)
-\EndFor
-\State Set $\mathbf{v_s}$ as the low-frequent vocabulary local
-\State Pull all $\mathbf{n(v_s, k)} \sim $ \textbf{Sparse(V, Z)}
-\State Issue DO\_SAMPLING($\mathbf{n(v_s, k), w_s}$)
-\end{algorithmic}  
-\end{algorithm}  
-
-\subsection{稀疏参数矩阵的维护}
+\subsection{稀疏存储Sparse(V, Z)的维护}
 在本文主题模型参数数据结构的设计中，低频词-主题分布表Sparse(V, Z)的稀疏性起到了至关重要的作用。
 但是如果没有得到维护，也会显现出一些问题。本节主要介绍流式环境下如何维护Sparse(V, Z)稀疏矩阵。
 
@@ -306,6 +211,60 @@ Sparse(V, Z)所对应的词汇子集含有大量的低频词，大部分词汇�
 
 以上两个算法都需要单独的步骤来删除稀疏数据结构Sparse(V, Z)中的零元来提高非零元的存储比例，减少不必要的网络传输。
 
+\subsection{参数的备份和恢复}
+前面已经介绍了在对于一个长时间运行的系统，任务失败是一个很常见的事情。
+造成这些错误的原因多种多样，在流式主题模型中主要的原因可能有：
+(a) 程序内部的BUG；(b) 算法运行超时；(c) 网络拥塞造成节点通信失败。
+
+现有的分布式并行处理框架都有设计并提供容灾机制。
+比如Spark中，如果一个Task失败之后，任务调度器还会尝试重启运行改Task。
+本文的流式主题模型就是在Spark Streaming的计算框架下实现的。
+
+然而Spark所提供的容灾机制并不能解决本文所提出的流式主题模型失败的问题。
+主要原因在于，在流式主题模型运行采样过程中，算法会频繁地更新参数服务器上的参数。
+虽然我们引入了许多优化方法，降低了模型参数的同步要求提高了并行度，但是在算法执行过程中参数服务骑上的参数始终维持一致性。
+当错误出现时，部分参数将会丢失，系统会抛出任务失败信息，但是我们无法定位失败时程序执行的位置。
+也就是说，参数服务器上的参数一致性受到了破坏。
+在这种情况下，即使我们重启了Task，仍然无法恢复参数的一致性，因而继续执行算法仍然会持续失败。
+
+为了提升算法系统的可用性，本文设计了参数的备份和恢复机制，如图\ref{fig:recovery}。
+\begin{figure}[htb]\centering
+\includegraphics[width=1\linewidth]{recovery}
+\caption{备份和恢复机制示意}
+\label{fig:recovery}% Give a unique label
+\end{figure}
+
+\subsubsection{备份机制}
+在本文的算法设计中，算法的参数在某些时刻是维持同步的，这些时刻包括每轮迭代之前和迭代完成之后的时刻。
+虽然这些时刻都可以作为合理的参数被份节点，但是本文的算法实现中我们选择了流式数据每个时间片开始执行之前的时间节点作为参数备份节点。
+
+我们知道，参数的备份是一个耗时耗空间的操作，并且在备份期间算法无法算法必须停止运行。
+但是，为了维护系统的稳定性保证在失败时能够正确地重启算法，备份机制是必要的。
+考虑到这些因素，流式数据的自然时间切片是一个较好的备份时间间隔。
+在图\ref{fig:recovery}中每个时间片执行完成之后便会启动备份，虚线箭头左端的黑色区域表示备份阶段。
+下一个时间片的算法之前参数需要与备份的参数保持一致。
+这么做我们不仅能够更好地维持流式数据的动态变化模型，而且使得算法系统花在备份的时间空间相对较少。
+
+\subsubsection{恢复机制}
+根据前面的叙述，算法运行超时是算法执行失败的一个重要因素。
+在真是应用场景中，由于流式数据的突发性特点，每个时间片的每个分区的算法运行时间很难得到有效的控制。
+所以，超时是一个时常发生的事情。尽管如此，也并不是所有的超时都会引起失败。
+那些引起失败的时间任务势必严重超时了。
+
+在算法失败之后，为了保证系统继续运行，必须引入算法的恢复机制。
+然而恢复机制的选择对系统的稳定性也有较大的影响。
+一方面恢复是一个耗废资源的操作，并且在此期间算法也要停止运行；
+另外一方面，即使正常恢复了算法运行，不同的恢复机制也对算法继续运行的鲁棒性有影响。
+
+在前面提到的超时失败的问题中，如果算法直接从失败的位置恢复并继续运行，那么势必延长该时间片任务的执行时间。
+那么，在严重超时的情况下，后续的时间片仍然需要等待当前时间片任务运行完成。
+这是一个阻塞的过程，这种恢复机制只会造成算法稳定性的持续下降，并不是一个好的方式。
+
+在本文提出的恢复机制中，我们秉持的调度原则是，当时间片到达时应该被第一时间处理。
+如图\ref{fig:recovery}
+当某一时间片的任务失败之后，那么该时间片将会被抛弃，同样被抛弃的时间片还会有其后续的未处理的时间片，最终只保留等待队列中的最后一个时间片并启动运行它。
+这种方法使得算法消除了超时的负面影响，大大提高了算法的稳定性。
+考虑到被丢失的数据，只会占整个数据流的很小的一部分，因而不会对算法模型的效果造成什么影响。
 
 \section{实验分析}
 
@@ -333,10 +292,43 @@ Sparse(V, Z)所对应的词汇子集含有大量的低频词，大部分词汇�
 起初三组实验算法运行时间存在明显的差异，其中静态词汇表大小为20000的实验显示运行时间远大于另外两组。
 但是随着时间的推移，运行时间逐渐降低并且逼近另外两组。这是因为Sparse(V, Z)随着算法迭代轮数的增加越来越稀疏，带来了网络传输量的急剧下降。
 
-\subsection{网络传输效率实验}
+\subsection{算法的可用性实验}
+\begin{figure}[htb]\centering
+\includegraphics[width=1\linewidth]{stream-process-time}
+\caption{Spark Streaming下流式主题模型的失败恢复实验}
+\label{fig:stream-process-time}       % Give a unique label
+\end{figure}
+如上图所示，左子图为流式主题模型算法各批次运行时间图，右子图为运行时间的柱状图统计。
+图\ref{fig:stream-process-time}中的虚线显示每个批次限定的合理运行时间为20000秒(3.3分钟)。
+红色的点表示故障发生的时刻。可见故障发生后，算法重启具有一定的时延，但是都能够继续正常的运行。
+通过左子图，我们还能够判断，除了少数超时和故障发生的情况，大部分时候算法维持稳定运行状态。
+这得益于本文良好的算法设计。
 
-\subsection{采样算法效率实验}
+\begin{figure}[htb]\centering
+\includegraphics[width=1\linewidth]{stable-process}
+\caption{流式主题模型运行状况示例}
+\label{fig:stable-process}       % Give a unique label
+\end{figure}
 
-\subsection{流式主题模型效果}
+如图\ref{fig:stable-process}上图显示的是算法各个批次的运行时间，以及柱状统计图。
+在参数设置合理的情况下，本文算能够持续鲁棒地运行。
+在这个例子中，我们每个批次共输入50000篇文档，迭代15轮，主题个数为100，每个批次时间间隔10分钟。
+我们发现除了算法开始执行的前几个批次算法运行时间超时外，其他批次的处理基本上不会超时。
+并且，随着时间的推移每个批次的运行时间呈下降趋势，并最终稳定在8分钟左右。
+这是因为在算法持续运行过程中，主题模型的参数逐渐变得稀疏，使得算法的运行效率有所提高。
+并且当运行足够长时间之后，算法的稀疏性不会再有太大的变化。
 
 \section{本章小结}
+本章主要介绍了流式主题模型的参数结构设计。
+在分布式并行算法实现中，人们通常会提及数据并行和模型并行两种并行方式。
+参数服务器的出现，使得这两种并行方式能够更好地结合在一起。
+在本文的算法实现中，我们应用了参数服务器作为分布式并行流式主题模型的主要组件。
+
+在本章我们着重分析了流式数据环境下，动态增长的词汇表对主题模型实现所造成的影响。
+并根据分析得到的结论提出了稠密和稀疏并存的参数数据结构。这种设计方案不仅有效地降低了参数存储的空间消耗，
+还能够降低算法采样过程中的同步和更新所带来的网络消耗。
+
+除了参数数据结构的设计，在本章中我们还介绍了，我们如何选择参数的数值类型和如何维护参数系数表Sparse(V, Z)的稀疏性。
+在章节的最后，我们还指出了在流式环境下，算法系统因为多种原因所造成的失败。
+为了保证算法系统的稳定性，本文提出了针对分布式流式主题模型的参数备份和恢复方案。
+实验证明，本章提出的参数数据结构和容错机制能够保证算法高效和稳定运行。

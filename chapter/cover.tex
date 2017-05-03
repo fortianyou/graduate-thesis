@@ -50,57 +50,63 @@
 
 % 定义中英文摘要和关键字
 \begin{cabstract}
-当今互联网上的数据正呈现出越来越快的增长趋势。
-许多数据都具有无限、实时、突发等主要特性，特别是社交网络数据。
+主题模型作为一种能够挖掘文本语义的技术受到了研究者的青睐，并且在业界得到了广泛的应用。
+在社交网络等领域中，主题模型是文本分类，检索以及推荐等应用的一项重要技术。
+
+随着移动互联网的发展应用，社交网络等许多场景中数据的产生正呈现出越来越快的增长趋势。
+许多数据都具有高速、海量、实时、突发等主要特性。
 人们通常形象地将这类数据称为流式数据。
 
-在社交网络以及其它文本挖掘技术的主要应用领域，主题模型作为一种能够挖掘文本语义的技术受到了青睐。
-因此，在流式数据上训练主题模型具有一定的研究意义。
+面对这种新型的数据流式特性，以往的主题模型的训练方法遭遇了巨大的挑战。
 流式机器学习的主要挑战在于，根据流式数据的特性，算法必须满足使用内存大小固定，高效实时，并且能够克服数据变动带来的对模型训练的影响。
-传统的批量学习并不满足上述要求。但是，目前绝大多数主题模型的高效实现都采用了在静态数据上的批量学习方法。
+以往大部分的主题模型算法实现都采用了批量的学习方法，但是批量学习并不满足上述要求。
 
-本文发现流式主题模型的设计与实现的主要难题在于：(1) 海量参数的分布式存储与并行更新同步困难；
-(2) 流式学习系统对算法实时性的要求极高；
-(3) 在社交网络等类似的数据环境下，不断会有新词出现，词表是动态增长的。
+通过调研，本文发现流式主题模型的设计与实现的主要难题在于：
+(1) 流式数据具有海量无限的体量，并且数据分布时刻发生变化； 
+(2) 在社交网络等类似的数据环境下，不断会有新词出现，词表是动态增长的；海量参数的分布式存储与并行更新同步困难；
+(3) 流式学习系统对算法实时性的要求极高；
 
-为了解决上述难题，本文介绍了如何设计与实现高效的分布式流式主题模型。
-首先，本文提出了两种针对流式数据的主题模型框架，
-在线流式主题模型和增量流式主题模型。
-这两种模型能够有效地克服流式数据的无限性，
+本文主要工作是设计与实现高效的分布式流式主题模型，以应对上面提出的挑战。
+首先，本文提出了一种针对流式数据的在线流式主题模型。
+该模型能够有效地克服流式数据的无限性与变动性，
 不仅算法能够动态地更新模型，而且具有概念迁移的能力。
-然后，本文又采用了 Metropolis-Hastings 和 Alias Table 技术，
-使得每次采样的复杂度降低到了 O(1)，保证了系统对算法实时性的要求。
-最后，本文从算法实现的角度出发设计了稠密和稀疏并存的参数数据结构以及引入了几种简单有效的实现优化方法。
-本文的算法在运行过程中只消耗固定的内存，大大降低了内存的浪费，提升了算法的运行速度。
+然后，本文从算法实现的角度出发设计了稠密和稀疏并存的混合参数数据结构，解决了动态词表所带来的参数存储与更新的难题。
+最后，本文提出了一种新的采样方法，大大降低了采样的复杂度，并在此基础上进一步优化了算法的实现，保证了系统对算法实时性的要求。
+本文提出的分布式流式主题模型的实现是一种高效，实时的具有动态演化能力的主题模型。
 
 \end{cabstract}
 
 \ckeywords{流式学习, 主题模型, Metropolis-Hastings, 参数服务器}
 
 \begin{eabstract}
+Topic Model has been favored in mining text semantics, 
+that is significantly concerned in researches and productions. 
+In the domain of text mining applications, such as social network,
+topic model is the key technology of text classification, retrieval and recommendation.
+
 Nowadays, the generation of data on the Internet shows growing trend. 
 Many of the data are unlimited, real-time, and rapid, especially in social network. 
 These data are called stream data.
 
-In the domain of text mining application, such as social network, topic model has been favored as a key technology of mining semantics.
 Train topic model with stream data is interesting and a tough task.
 Stream learning is confronted with a few great challenges. According to the features of stream data, 
-Stream learning system required algorithm to be fixed memory consumption, efficient and real-time, trained against multivate data distribution.
+Stream learning system required algorithm to be fixed memory consumption, efficient and real-time, trained against volatile data distribution.
 However, the traditional batch learning does not meet these requirements.
-And the most efficient implementations of topic model usually trained by batch leanring process with static data.
+And the most efficient implementations of topic model usually trained by batch learning process with static data.
 
 In this paper, we found the main troubles in the design and implementation of distributed stream topic model are:
-(1) it's hard to distributed store and parallel update massive parameters;
-(2) the requirements of efficiency and real-time is significant to stream learning system;
-(3) new words would apear at any time in scenarios like social network.
+(1) the stream data is unlimited and volatile.
+(2) new words would appear at any time in scenarios like social network.
+(3) the requirements of efficiency and real-time is significant to stream learning system;
 
 In order to solve the problems addressed above, we introduced how to design and implement distributed stream topic model in this paper.
-First, we introduced two stream topic model framework, i.e., online stream topic model and incremental stream topic model.
-These models solved the problem of infinty and volatility of stream data, and could capture the evaluation of topics upon stream data.
-Second, we applied an efficient sampling strategy that take the advantage of metropolis-hastings and alias table.
-We sample each token with complexity O(1) finally, witch is significant effective than original sampling method.
-Finally, we designed a dense-sparse mixture parameter datastructure that greatly reduce the running time of the application.
-Also we have used some other effective implementation optimization methods.
+First, we introduced a new stream topic model, online stream topic model.
+The model solved the problem of infinity and volatility of stream data, and could capture the evaluation of topics upon stream data.
+Second, we designed a dense-sparse mixture parameter data structure that greatly reduce the space consumption and running time of the application.
+Finally, we applied an efficient sampling strategy that takes the advantage of metropolis-hastings and alias table, 
+which is much effective than original sampling method.
+Our model is high-performance, real-time and has the ability to evolve.
+
 \end{eabstract}
 
 \ekeywords{Stream Learning, Topic Model, Metropolis-Hastings, Parameter Server}
