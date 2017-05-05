@@ -279,25 +279,27 @@ On-Line LDA借此将主题模型很好地应用于主题检测与跟踪。
 
 (5) 具有概念迁移能力。
 
-本文提出了如下两种分布式流式数据算法框架，在线流式主题模型和增量流式主题模型。
+在线流式主题模型的提出主要是受到了OLDA\cite{hoffman2010online}和On-Line LDA\cite{alsumait2008on-line}以及DTM\cite{blei2006dynamic, wang2012continuous}等论文的启发。
 
-\subsection{在线流式主题模型}
-在线流式主题模型的提出主要是受到了OLDA\cite{hoffman2010online}和On-Line LDA\cite{alsumait2008on-line}的启发。
-这两个算法都将数据集进行时间分片，但是每个时间片只会有一篇文档出现。
-这种一个时间分片一篇文档的串行做法无法直接扩展到流式主题模型应用之上。
-本文的做法是对数据集进行时间分片，但是每个时间分片内都包含若干篇文档。
-当某一时间片的数据集到达时，应用便会通过分布式并行的Gibbs采样算法更新模型，并产生必要的输出。
+\begin{figure}[htb]\centering
+  \includegraphics[width=0.5\linewidth]{graph-ostm}
+  \caption{在线流式主题模型图模型表示}
+  \label{fig:OSTM}       % Give a unique label
+\end{figure}
 
-分布式并行Gibbs采样算法的提出参考了\cite{smola2010an}。在分布式算法中，数据被均衡地分布式存储在不同的位置，因而并行算法可以通过数据并行的方式实现。考虑到：
-\begin{equation}
-p( z_i = k | \mathbf{z}_{\neg i},  \mathbf{w}) 
- \propto \dfrac{ n_{k, w_i}^{\neg i,j} + \eta }{ n_{k, \cdot}^{\neg i,j} + V\eta}
-(n_{k, m}^{\neg i,j} + \alpha)
-\end{equation}
-主题抽样的概率只会依赖于$n_{k, w_i}^{\neg i,j}, n_{k, \cdot}^{\neg i,j}, n_{k, m}^{\neg i,j}$，因而与其他文档的主题计数无关。
-主题模型并行采样算法的核心思想便是少数文档的采样并不会对全局主题分布$n(k)$和词汇-主题表$n(w, k)$造成很大的影响。
-这意味着并行算法可以放松对$n(k)$和$n(w, k)$的同步（严格的同步极大的降低分布式算法的效率），从而可以加大算法的并行度同时保证算法收敛。
-综上，本文提出的算法将设置$n(k)$和$n(w, k)$为全局参数，并假设在某些时刻这两个参数会得到同步（比如，以时间片为粒度）。
+如图\ref{fig:OSTM}，该模型以流式计算为背景，将流式数据按照批次分割成不同的时间片。
+图中$\beta$表示某一时间片内，词汇的主题后验计数；$\lambda \in (0, 1)$表示衰减权重。
+时间片之间的模型训练是相互独立的，但是连续的两个时间片之间存在着依赖关系。
+图中时间片之间的箭头表示，将上一时刻的后验计数$\beta^{t-1}$作为当前时刻主题词汇分布$Dir(\beta^t| \eta + \lambda \beta^{t- 1})$的先验。
+
+该模型是针对流式数据而提出的，最终目标是方便实现大规模在线分布式并行采样算法的实现。
+本文的方法虽然与以往的一些工作有相似之处，但是存在明显的区别。
+其中，DTM与OLDA均采用变分推理的方法来训练模型，而本文的方法使用了采样的方法，更有利于分布式并行实现。
+除此之外，DTM虽然对时间进行了建模，当时DTM是一个批量的学习算法，无法适应流式数据场景。
+OLDA虽然采用了在线的学习算法，但是该算法并没有对模型的动态演变能力进行建模。
+On-Line LDA与本文的模型一样都具有演变能力，同时也是基于采样算法实现。
+但是On-Line LDA并没有针对流式数据场景设计，其使用了窗口机制保存了一个窗口之内的所有先验知识，对于拥有海量参数的大规模模型是无法容忍的。
+
 \begin{algorithm}[]
 \caption{Online Stream Topic Model}
 \label{alg:onlineStreamLDA}
@@ -308,7 +310,7 @@ p( z_i = k | \mathbf{z}_{\neg i},  \mathbf{w})
 \State Add unkown words to $V_g$, $V_g = V_g \cup V^t$
 \State Set $\beta^t(w, k) = \eta$, push $\beta^t(w, k)$, for $w \in (V_g - V^t)$, and update $\beta^t(k)$ accordingly.
 \State Synchronize and pull parameter set $\beta^t(k), \beta^t(w, k)$ from servers
-\State Set $\bigtriangleup \beta^t(k) = (\rho_t - 1) \beta^t(k), \bigtriangleup \beta^t(w, k) = (\rho_t - 1) \beta^t(w, k)$
+\State Set $\bigtriangleup \beta^t(k) = \lambda_t \beta^t(k), \bigtriangleup \beta^t(w, k) = \lambda_t \beta^t(w, k)$
 \State Push $\bigtriangleup \beta^t(k), \bigtriangleup \beta^t(w, k)$  to servers and synchronize.
 \EndFunction
 \State Create a global vocabulary $V_g$
@@ -325,12 +327,12 @@ p( z_i = k | \mathbf{z}_{\neg i},  \mathbf{w})
 \EndFunction
 \Function{ WORKER\_SAMPLE}{$t$}
 \State Issue LOAD\_DATA($t$)
-\State Initialize topic assignment to each word in $C^t$ 
+\State Initialize topic assignment to each word in $C^t$ with prior knowledge.
 \For{ each word $w$ in $C^t$ }
 \State DO\_SAMPLING($C^t, \beta^t(k), \beta^t(w, k), \alpha$)
 \EndFor
 \State Collect and summary $n_{k,w}^{(t)}$ and $n_{k}^{(t)}$
-\State Set $\bigtriangleup \beta^t(k) = \rho_t n_{k}^{(t)}, \bigtriangleup \beta^t(w, k) = \rho_t n_{k,w}^{(t)}$ and push $\bigtriangleup \beta^t(k), \bigtriangleup \beta^t(w, k)$ to servers
+\State Set $\bigtriangleup \beta^t(k) = n_{k}^{(t)}, \bigtriangleup \beta^t(w, k) = n_{k,w}^{(t)}$ and push $\bigtriangleup \beta^t(k), \bigtriangleup \beta^t(w, k)$ to servers
 \EndFunction
 \end{algorithmic}  
 \textbf{\underline{Servers:}}
@@ -342,70 +344,60 @@ p( z_i = k | \mathbf{z}_{\neg i},  \mathbf{w})
 \end{algorithmic}
 \end{algorithm}  
 
-算法\ref{alg:onlineStreamLDA}总共分为三个部分Task Scheduler, Workers, Servers。其中Task Scheduler是一个单机的算法调度模块，Workers是分布式并行的主要进程，Servers表示参数服务器。$\rho_t \in (0, 1)$表示衰减权重，可以有不同的定义。
-这么做使得$\beta^t(k)$和$\beta^t(w, k)$拥有历史信息。
-根据Dirichlet和多项式分布共轭的属性，我们将已观测到$\beta^t(w, k)$信息作为主题生成词多项式分布的Dirichlet先验。FastGibbsSampling函数提供了快速地采样算法，本文将这一部分放在后面的章节讨论。
+论文\cite{smola2010an}中提出了一种分布式并行Gibbs采样算法。在该分布式算法中，数据被均衡地分布式存储在不同的位置，
+因而并行算法可以通过数据并行的方式实现。考虑到：
+\begin{equation}
+p( z_i = k | \mathbf{z}_{\neg i},  \mathbf{w}) 
+ \propto \dfrac{ n_{k, w_i}^{\neg i,j} + \eta }{ n_{k, \cdot}^{\neg i,j} + V\eta}
+(n_{k, m}^{\neg i,j} + \alpha)
+\label{eq:sample-prob}
+\end{equation}
+主题抽样的概率只会依赖于$n_{k, w_i}^{\neg i,j}, n_{k, \cdot}^{\neg i,j}, n_{k, m}^{\neg i,j}$，因而与其他文档的主题计数无关。
+主题模型并行采样算法的核心思想便是少数文档的采样并不会对全局主题分布$n(k)$和词汇-主题表$n(w, k)$造成很大的影响。
+这意味着并行算法可以放松对$n(k)$和$n(w, k)$的同步（严格的同步极大的降低分布式算法的效率），从而可以加大算法的并行度同时保证算法收敛。
+这种分布式模型并行思路被许多高效的主题模型分布式并行实现所采纳。
+
+在本文的算法实现中我们延续了论文\cite{smola2010an}的思想，设置$n(k)$和$n(w, k)$为全局参数，
+并假设在某些时刻这两个参数会得到同步（比如，以时间片为粒度）。
+
+算法\ref{alg:onlineStreamLDA}总共分为三个部分Task Scheduler, Workers, Servers。
+其中Task Scheduler是一个单机的算法调度模块，Workers是分布式并行的主要进程，Servers表示参数服务器。
+$\lambda_t \in (0, 1)$表示衰减权重，可以有不同的定义。
+这么做使得$\beta^t(k)$和$\beta^t(w, k)$拥有衰减的历史后验信息。
+根据Dirichlet和多项式分布共轭的属性，我们将已观测到$\beta^t(w, k)$信息作为主题生成词多项式分布的Dirichlet先验。
 
 流式主题模型算法迭代以时间为单位，在每个Worker的采样算法开始之前，各个Worker得到的模型参数是同步的。
 而在每个时间片内部，所有的Worker之间是完全异步的，Worker进程之间的采样过程不需要互相等待。
-另外在流式环境下，不断会有新词出现，模型必须能够动态的维护新词。
-这种新词所带来的维护成本巨大，本文将在后面的章节中对此进行讨论分析。
+另外在流式环境下，不断会有新词出现，模型必须能够动态的维护新词，本文将在后面的章节中讨论如何维护动态词表。
 
-\subsection{增量流式主题模型}
-%增量学习方法的思路来自于\cite{Canini_onlineinference}
-除了上一节提到的使用衰减权重的方法来保留历史信息，并使得模型更容易演变。
-本节介绍的算法采用窗口化的方法，在流数据移动窗口，窗口内的所有数据信息将会被保留，窗口外的所有数据信息将会被消除。
-显然，窗口越大模型所能保留的数据信息越完整。当窗口足够大时，我们有理由相信模型算法能够训练得到一个趋近与真实数据分布的模型。
+\section{实验分析}
 
-\begin{algorithm}
-\caption{Incremental Stream Topic Model}
-\label{alg:IncStreamLDA}
-\textbf{\underline{Task Scheduler:}}
-\begin{algorithmic}[1]
-\Function{UPDATE\_VOCAB\&PARAMS}{$t$}
-\State Collect and summary vocabulary $V^t$ at $S^t$
-\State Add unkown words to $V_g$, $V_g = V_g \cup V^t$
-\EndFunction
-\State Create a global vocabulary $V_g$
-\For{ t = 1 to $\infty$}
-\State Issue UPDATE\_VOCAB\&PARAMS(t)
-\State Issue WORKER\_SAMPLE($t$) to all workers
-\EndFor
-\end{algorithmic}
-\textbf{\underline{Worker $r = 1, ..., R$:}}
-\begin{algorithmic}[1]
-\Function{ LOAD\_DATA}{$t$}
-\State Load a part of training data of $S^t$ as $C^t$
-\State Pull the parameter set $\beta^t(k)$ and $\beta^t(w, k)$ from servers
-\EndFunction
-\Function{ WORKER\_SAMPLE}{$t$}
-\State Issue LOAD\_DATA($t$)
-\State Initialize topic assignment to each word in $C^t$ 
-\For{ each word $w$ in $C^t$ }
-\State DO\_SAMPLING($C^t, \beta^t(k), \beta^t(w, k), \alpha$)
-\EndFor
-\State Collect and summary $n_{k,w}^{(t)}$ and $n_{k}^{(t)}$
-\State Load $\bigtriangleup \beta^{t - \sigma}(k), \bigtriangleup \beta^{t - \sigma}(w, k)$ from local file
-\State Set $\bigtriangleup \beta^t(k) = n_{k}^{(t)} - \beta^{t - \sigma}(k), \bigtriangleup \beta^t(w, k) = n_{k,w}^{(t)} - \beta^{t - \sigma}(w, k)$ 
-\State Push $\bigtriangleup \beta^t(k), \bigtriangleup \beta^t(w, k)$ to servers
-\State Store $\bigtriangleup \beta^t(k), \bigtriangleup \beta^t(w, k)$ to local file
-\EndFunction
-\end{algorithmic}
-\textbf{\underline{Servers:}}
-\begin{algorithmic}[1]
-\Function{SERVER\_ITERATE}{$t$}
-\State Aggregate $\bigtriangleup \beta^t(k) = \sum_r^R{\bigtriangleup \beta^t_r(k)}, \bigtriangleup \beta^t(w, k) = \sum_r^R{\bigtriangleup \beta^t_r(w, k)}$
-\State $\beta^{(t+1)}(k) =\beta^t(k) +  \bigtriangleup \beta^t(k), \beta^{(t+1)}(w, k) = \beta^t(w, k) + \bigtriangleup \beta^t(w, k)$
-\EndFunction
-\end{algorithmic}
-\end{algorithm}  
+\begin{figure}[htb]\centering
+  \includegraphics[width=1\linewidth]{exp-stream-perplexity}
+  \caption{在线流式主题模型运行效果图}
+  \label{fig:exp-stream-perplexity}       % Give a unique label
+\end{figure}
 
-使用窗口机制的另外一个好处在于能够使得模型更聚焦于近段时间的数据，从而学习到更具有时效性的模型。
-另外，窗口机制还存在其他优点本文将在后续章节讨论。
+上图\ref{fig:exp-stream-perplexity}展示的是在线流式主题模型在某一数据上的运行效果图。
+图中评价指标为每个时间片数据上的Perplexity。
+实验中我们设置了衰减权重主题模型个数$K = 100$，每个时间片10000个文档，每个时间片算法迭代30轮。
+实验中我们共有4组实验，分别设置了$\lambda = 0, 0.5, 0.25, 0.125$。
+不难发现，每个时间片上的主题模型训练都呈现出收敛的趋势，且衰减权重的设置对在线流式主题模型的效果影响重大。
 
-算法\ref{alg:IncStreamLDA}与算法\ref{alg:onlineStreamLDA}相同具有三个部分，与其不同之处在于算法\ref{alg:IncStreamLDA}不使用衰减权重来保留历史信息，
-而是保留窗口$[t - \sigma, t]$内的所有时间片的词汇-主题计数信息。这种方法从实现上来说更简单，也会带来更多的优点，在后续的章节中将予以讨论。
+当$\lambda = 0$时，也就是不考虑历史数据的影响，在线流式主题模型相当于重新训练主题模型；
+当$\lambda \ne 0 $时，模型将历史数据作为先验，并且$\lambda$值越大模型受到先验的影响越大，收敛越快，但是Perplexity相对较大。
+实际上，在许多机器学习的研究中都提到过先验知识能够提升模型的泛化能力。
+先验知识太强也有可能使得模型在训练集上的效果变差。本文的实验正好符合这个现象。
+在许多应用中，先验参数的选择是一个经验问题。特别在本文的在线应用场景中，我们很难确定什么参数最合适。
+但这并不意味着我们无法选择一个合适的参数。比如，我们可以将在线实时的反馈结果作为选择参数的依据。
+
+尽管我们并不知道最合适的参数是多少，但是我们发现本文的算法在不同的时间片上都具有收敛的态势。
+只要参数设置合理，对于一批新数据模型能够迅速地收敛到一个比较好的位置，说明本文的算法具有适应新数据的能力。
+
 \section{本章小结}
-本章主要介绍了大规模流式主题模型的设计。首先介绍了LDA模型的基本理论背景，包括LDA模型的介绍，以及常见LDA参数估计方法。从算法框架角度看，又有多种不同的批量估计方法和在估计方法。
+本章主要介绍了大规模流式主题模型的设计。首先介绍了LDA模型的基本理论背景，包括LDA模型的介绍，以及常见LDA参数估计方法。
+从算法框架角度看，又有多种不同的批量估计方法和在估计方法。
 在流式数据环境下，数据呈现出海量、高速、实时等特性。这些特性使得批量算法和简单的在线算法无法被直接应用。
-因此，本文提出了两种大规模流式主题模型的设计方案，分别是在线流式主题模型和增量流式主题模型。在后续的章节中，本文将更加详细地介绍如何高效地实现这两类流式主题模型算法。
+因此，本文提出了一种大规模流式主题模型的设计方案。
+该模型不同以往的主题模型，它是针对流式数据特性而设计的，便于高效的分布式采样算法的实现。
+在后续的章节中，本文将更加详细地介绍如何高效地实现这两类流式主题模型算法。

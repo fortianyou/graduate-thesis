@@ -107,7 +107,7 @@ p(i) \underbrace{q(i \rightarrow j) \alpha(i \rightarrow j)}_{q^{\prime}(i \righ
 
 \section{Alias Table}
 \begin{figure}[htb]\centering
-\includegraphics[height=0.4\linewidth,width=1\linewidth]{alias-table}
+\includegraphics[width=0.8\linewidth]{alias-table}
 \caption{Alias Table构建过程示意}
 \label{fig:alias-table}       % Give a unique label
 \end{figure}
@@ -162,7 +162,7 @@ $l = l - 1; \mbox{prob}[\mbox{large}[l]] = 1$ \EndWhile
 
 Init算法实际上是对一个面积为1的区域进行填空的过程。
 这种填空方法的思路主要来自于，如果把概率看做长度，变量的宽都为1，
-对于均匀分布有所有变量的长度都为$frac{1}{n}$，刚好组成一个面积为1的矩形区域。
+对于均匀分布有所有变量的长度都为$\frac{1}{n}$，刚好组成一个面积为1的矩形区域。
 相当于将面积1等分为$n$个区间，此时随机选取一个$(0, 1)$之间的值，便能立即确定其属于哪个区间。
 但这只是特例，大多数时候有一部分变量的概率不到$\frac{1}{n}$，而另外一部分概率超过了$\frac{1}{n}$，
 为了构造上面提到的矩形，Alias Table的算法采取优先填满每个等分区间（每个区间最多被两个随机数占用）的方式，用长板补短板，逐一填空。
@@ -266,8 +266,8 @@ Light LDA同样应用了Metropolis-Hastings和Alias Table技术，将每次采�
 \subsection{优化算法采样顺序}
 
 \begin{algorithm}[htb]
-\label{alg:natural-order}
 \caption{Sample in Natural Order}
+\label{alg:natural-order}
 \begin{algorithmic}[1] 
 \Require TAB(V, Z), $\mathbf{k} = [1, 2, ..., K], \mathbf{w}$
 \For { m = 1 to $M$ }
@@ -341,7 +341,7 @@ Sparse(V, Z)所对应的词汇子集含有大量的低频词，大部分词汇�
 
 \begin{algorithm}[htb]
 \caption{Pipeline Parameters Update} 
-\label{alg:vocab-order}
+\label{alg:pipeline}
 \begin{algorithmic}[1]
 \Require TAB(V, Z) = \textbf{\{Dense(V, Z), Sparse(V, Z)\}}, $\mathbf{k} = [1, 2, ..., K], \mathbf{w_d, w_s}$
 \Function{DO\_SAMPLING}{$\mathbf{n(v_b, k), w}$}
@@ -361,7 +361,7 @@ Sparse(V, Z)所对应的词汇子集含有大量的低频词，大部分词汇�
 \end{algorithm}  
 
 \section{实验分析}
-\subsection{主题模型效果分析}
+\subsection{采样算法效率分析}
 
 本节首先对本文提出的Metropolis-Hastings采样方法的效率进行实验设置。
 \begin{figure}[htb]\centering
@@ -383,7 +383,7 @@ Sparse(V, Z)所对应的词汇子集含有大量的低频词，大部分词汇�
 而本文的采样算法每轮迭代仅需要20秒。
 事实上，如果我们将主题模型的主题个数$K$增大，这种差距会更加明显。
 
-\subsection{采样算法网络效率分析}
+\subsection{算法网络效率分析}
 
 本节实验主要从网络效率的角度分析本文采样算法的效率。
 \begin{figure}[htb]\centering
