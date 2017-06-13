@@ -281,6 +281,14 @@ On-Line LDA借此将主题模型很好地应用于主题检测与跟踪。
 
 在线流式主题模型的提出主要是受到了OLDA\cite{hoffman2010online}和On-Line LDA\cite{alsumait2008on-line}以及DTM\cite{blei2006dynamic, wang2012continuous}等论文的启发。
 
+\begin{equation}
+\label{eq:dir-gonge}
+Dir(\mathbf{p} | \eta + \beta ) = Dir(\mathbf{p} | \eta ) + MultiCount( \beta )
+\end{equation}
+
+根据Dirichlet-Multinomial共轭\ref{eq:dir-gonge}，$Dir(\mathbf{p} | \eta )$表示数据的先验分布，
+$MultiCount(\beta)$表示观测到数据多项式统计，$Dir(\mathbf{p} | \eta)$表示给定先验分布与观测数据得到的相应后验分布。
+
 \begin{figure}[htb]\centering
   \includegraphics[width=0.5\linewidth]{graph-ostm}
   \caption{在线流式主题模型图模型表示}
@@ -288,17 +296,24 @@ On-Line LDA借此将主题模型很好地应用于主题检测与跟踪。
 \end{figure}
 
 如图\ref{fig:OSTM}，该模型以流式计算为背景，将流式数据按照批次分割成不同的时间片。
-图中$\beta$表示某一时间片内，词汇的主题后验计数；$\lambda \in (0, 1)$表示衰减权重。
-时间片之间的模型训练是相互独立的，但是连续的两个时间片之间存在着依赖关系。
-图中时间片之间的箭头表示，将上一时刻的后验计数$\beta^{t-1}$作为当前时刻主题词汇分布$Dir(\beta^t| \eta + \lambda \beta^{t- 1})$的先验。
+仅有相邻的时间片模型之间产生关联。
+图中$\beta$对应于$MultiCount(\beta)$多项式统计；图展示的是$t$时刻之后，算法将会得到一个后验的模型后验分布$Dir(\mathbf{p} | \eta + \beta_t)$。
+为了使得$t$时刻训练得到的模型对$t+1$时刻的模型产生影响，本文的算法将$t$时刻的后验分布$Dir(\mathbf{p} | \eta + \beta_t )$作为
+$t+1$时刻模型的先验分布。为了使得模型具有迁移演化能力，我们引入了$\lambda \in (0, 1)$表示衰减权重，应用于上一个时刻的观测数据之上。
+最终在$t+1$时刻的模型先验分布可以表示为$Dir(\mathbf{p} | \eta + \lambda \beta_t )$。
 
-该模型是针对流式数据而提出的，最终目标是方便实现大规模在线分布式并行采样算法的实现。
 本文的方法虽然与以往的一些工作有相似之处，但是存在明显的区别。
-其中，DTM与OLDA均采用变分推理的方法来训练模型，而本文的方法使用了采样的方法，更有利于分布式并行实现。
-除此之外，DTM虽然对时间进行了建模，当时DTM是一个批量的学习算法，无法适应流式数据场景。
+其中最重要的区别便是本文模型针对流式数据而提出，最终目标是方便实现大规模在线分布式并行采样算法的实现。
+而DTM, OLDA以及On-Line LDA等模型并非针对流式数据的模型，因而无法适应在流式数据上的进行模型训练。
+
+除此之外，DTM与OLDA均采用变分推理的方法来训练模型，而本文的方法使用了采样的方法，更有利于分布式并行实现。
+DTM虽然对时间进行了建模，当时DTM是一个批量的学习算法，无法适应流式数据场景。
 OLDA虽然采用了在线的学习算法，但是该算法并没有对模型的动态演变能力进行建模。
+
 On-Line LDA与本文的模型一样都具有演变能力，同时也是基于采样算法实现。
-但是On-Line LDA并没有针对流式数据场景设计，其使用了窗口机制保存了一个窗口之内的所有先验知识，对于拥有海量参数的大规模模型是无法容忍的。
+但是On-Line LDA的模型先验分布表示为$Dir(\mathbf{p} | \eta + \sum_{i=1}^{win}{\beta_{t-i}} )$，
+需要保存窗口$win$以内的所有历史数据，不仅对于拥有海量参数的大规模模型是无法容忍的，还会造成参数维护困难。
+另外，本文提出的分布式MH采样算法效率要远远高于On-Line LDA采用的单机串行Gibbs采样算法。
 
 \begin{algorithm}[]
 \caption{Online Stream Topic Model}
@@ -372,6 +387,16 @@ $\lambda_t \in (0, 1)$表示衰减权重，可以有不同的定义。
 
 \section{实验分析}
 
+\subsection{实验设置}
+本文所有实验均采用如下设置,
+
+\em{数据源:} 本文的实验数据均来自于某未公开动态实时数据，该数据中包含财经，体育，娱乐等多种类型内容;
+
+\em{计算引擎:} 在本文的所有实验中，均采用了Spark Streaming作为流式计算引擎，拥有3台计算节点和1个参数服务器节点;
+
+\em{节点信息:} Centos 6.6, 128G内存, 24 Intel(R) Xeon(R) CPU E5-2620 0 @ 2.00GHz。
+
+\subsection{效果分析}
 \begin{figure}[htb]\centering
   \includegraphics[width=1\linewidth]{exp-stream-perplexity}
   \caption{在线流式主题模型运行效果图}
@@ -400,4 +425,4 @@ $\lambda_t \in (0, 1)$表示衰减权重，可以有不同的定义。
 在流式数据环境下，数据呈现出海量、高速、实时等特性。这些特性使得批量算法和简单的在线算法无法被直接应用。
 因此，本文提出了一种大规模流式主题模型的设计方案。
 该模型不同以往的主题模型，它是针对流式数据特性而设计的，便于高效的分布式采样算法的实现。
-在后续的章节中，本文将更加详细地介绍如何高效地实现这两类流式主题模型算法。
+在后续的章节中，本文将更加详细地介绍如何高效地实现这种流式主题模型算法。

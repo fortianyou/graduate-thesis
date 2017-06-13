@@ -106,13 +106,9 @@ p(i) \underbrace{q(i \rightarrow j) \alpha(i \rightarrow j)}_{q^{\prime}(i \righ
 \end{algorithm}  
 
 \section{Alias Table}
-\begin{figure}[htb]\centering
-\includegraphics[width=0.8\linewidth]{alias-table}
-\caption{Alias Table构建过程示意}
-\label{fig:alias-table}       % Give a unique label
-\end{figure}
+
 Alias Table\cite{vose1991a}是一项生成随机数的技术。给定一个概率分布$p(X)$，Alias Table能够按照概率分布$p(X)$以$O(1)$的时间复杂度生成一个随机数$x$。
-不妨另$p(X) = \{p_0, p_1, ..., p_n\}$表示在变量$X=\{X_0, X_1, ..., X_n\}$上的分布，其中$\sum_i^n {p_i} = 1, p_i \ge 0$。
+不妨令$p(X) = \{p_0, p_1, ..., p_n\}$表示在变量$X=\{X_0, X_1, ..., X_n\}$上的分布，其中$\sum_i^n {p_i} = 1, p_i \ge 0$。
 那么Alias Table技术等价于一次$O(n)$复杂度的初始化操作和任意次$O(1)$复杂的随机数生成操作。
 
 算法\ref{alg:alias-table}中prob和alias是在Init步骤构建好的两个大小为$n$的表。
@@ -167,7 +163,13 @@ Init算法实际上是对一个面积为1的区域进行填空的过程。
 但这只是特例，大多数时候有一部分变量的概率不到$\frac{1}{n}$，而另外一部分概率超过了$\frac{1}{n}$，
 为了构造上面提到的矩形，Alias Table的算法采取优先填满每个等分区间（每个区间最多被两个随机数占用）的方式，用长板补短板，逐一填空。
 
-如图\ref{fig:alias-table}实际上算法\ref{alg:alias-table}的Init步骤等价于在填写一个面积为1的矩形区域。
+\begin{figure}[htb]\centering
+\includegraphics[width=0.8\linewidth]{alias-table}
+\caption{Alias Table构建过程示意}
+\label{fig:alias-table}       % Give a unique label
+\end{figure}
+
+如图\ref{fig:alias-table}, 实际上算法\ref{alg:alias-table}的Init步骤等价于在填写一个面积为1的矩形区域。
 
 (1) 该矩形被等分为$n$份，每一份的面积等于$\frac{1}{n}$。
 
@@ -198,7 +200,7 @@ p(z_i = y , \mathbf{z}_{\neg i}, \mathbf{w}) p( z_i = x | \mathbf{z}_{\neg i},  
 实际上，造成Gibbs采样算法低效的主要原因是采样概率的计算比较复杂，并且需要被频繁地更新（每次采样之后都会得到更新）。
 针对Gibbs采样算法效率低的问题，Sparse LDA利用了参数的稀疏性，将每次采样的算法复杂度降低到了$O(K_w)$。
 Alias LDA算法同样利用了参数的稀疏性，但是引入了Metropolis-Hastings和Alias Table技术，将算法复杂度降低到了$O(K_d)$。
-Light LDA同样应用了Metropolis-Hastings和Alias Table技术，将每次采样的算法那复杂度降低到了$O(1)$，
+Light LDA同样应用了Metropolis-Hastings和Alias Table技术，将每次采样的算法复杂度降低到了$O(1)$，
 但是这种方法需要交替地应用两种不同的提议分布，
 以达到更好的收敛效果。
 受到这些技术的启发，本文也提出了一种高效的采样算法。
